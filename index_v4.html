@@ -1,0 +1,309 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>KFB Partnership Map — v4</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    :root {
+      --color-smallbiz: #4edf00;
+      --color-corp: #bc1214;
+      --color-community: #f99f19;
+      --banner-bg: #6a764b;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, Arial, sans-serif; background: #f7fff3; }
+    header {
+      padding: 10px 16px; background: var(--banner-bg); color: #ffffff; font-weight: 800;
+      display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 1000;
+    }
+    header .title { color: #f99f19; }
+    header .actions { display: flex; gap: 8px; align-items: center; }
+    .container { display: grid; grid-template-columns: 380px 1fr; gap: 0; min-height: calc(100vh - 52px); transition: grid-template-columns 0.25s ease; }
+    .container.collapsed { grid-template-columns: 0px 1fr; }
+    .sidebar { background: #ffffff; border-right: 2px solid #dfeede; padding: 12px; overflow: auto; transition: width 0.25s ease, padding 0.25s ease, border 0.25s ease; }
+    .container.collapsed .sidebar { width: 0; padding: 0; border: none; overflow: hidden; }
+    .mapwrap { position: relative; }
+    #map { width: 100%; height: calc(100vh - 52px); }
+    h2 { margin: 6px 0 8px; font-size: 16px; color: #0b3b00; }
+    label { font-size: 12px; color: #333; }
+    input, select, textarea { width: 100%; padding: 8px; border: 1px solid #cfe3cf; border-radius: 10px; background: #fbfffb; }
+    textarea { min-height: 60px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+    button { padding: 10px 10px; border-radius: 12px; border: 1px solid #cfd9cf; background: white; cursor: pointer; font-weight: 600; }
+    button.primary { background: var(--color-smallbiz); color: #073700; border-color: #9ee79f; }
+    button.danger { background: #ffe9e9; color: #7b0000; border-color: #ffb9b9; }
+    .pill { padding: 4px 8px; border: 1px solid var(--banner-bg); border-radius: 999px; font-size: 12px; display: inline-block; color: var(--banner-bg); background: white; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { text-align: left; border-bottom: 1px solid #eef5ee; padding: 6px 4px; font-size: 12px; }
+    th { background: #f2fbf2; position: sticky; top: 0; z-index: 1; }
+    .tablewrap { max-height: 34vh; overflow: auto; border: 1px solid #e7f3e7; border-radius: 10px; background: #fff; }
+    .toggle-btn { position: absolute; top: 12px; left: 12px; z-index: 1001; background: #ffffff; border: 2px solid #dfeede; border-radius: 10px; padding: 8px 10px; font-weight: 700; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
+    footer { position: fixed; right: 8px; bottom: 6px; background: rgba(255,255,255,0.9); border: 1px solid #ddd; padding: 4px 8px; border-radius: 8px; font-size: 11px; color: #444; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="title">KFB Partnership Map</div>
+    <div class="actions">
+      <label class="pill">Import CSV <input type="file" id="importCsv" accept=".csv" style="display:none;"></label>
+      <button id="exportCsv">Export CSV</button>
+      <button id="resetAll" class="danger">Reset All</button>
+    </div>
+  </header>
+
+  <div class="container" id="layout">
+    <aside class="sidebar" id="sidebar">
+      <h2>Partner Details</h2>
+      <div class="row">
+        <div>
+          <label>Category</label>
+          <select id="category">
+            <option value="Small Business">Small Business</option>
+            <option value="Corporation">Corporation</option>
+            <option value="Community Partner">Community Partner</option>
+          </select>
+        </div>
+        <div>
+          <label>Partner Name</label>
+          <input id="name" placeholder="e.g., Midland University" />
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>Address</label>
+          <input id="address" placeholder="Street address" />
+        </div>
+        <div>
+          <label>City</label>
+          <input id="city" placeholder="Fremont, NE" />
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>Latitude</label>
+          <input id="lat" placeholder="41.43" />
+        </div>
+        <div>
+          <label>Longitude</label>
+          <input id="lon" placeholder="-96.49" />
+        </div>
+      </div>
+      <div>
+        <label>Notes</label>
+        <textarea id="notes" placeholder="Any notes..."></textarea>
+      </div>
+      <div class="btns">
+        <button id="addUpdate" class="primary">Add / Update</button>
+        <button id="clearForm">Clear Form</button>
+      </div>
+
+      <h2 style="margin-top:14px;">Current Partners</h2>
+      <div class="tablewrap">
+        <table id="partnersTable">
+          <thead>
+            <tr>
+              <th>Category</th>
+              <th>Name</th>
+              <th>City</th>
+              <th>Lat</th>
+              <th>Lon</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </aside>
+
+    <section class="mapwrap">
+      <button class="toggle-btn" id="toggle">☰ Partner Details</button>
+      <div id="map"></div>
+    </section>
+  </div>
+
+  <footer>v4 • jsDelivr CDNs • bottom-right zoom • sticky legend</footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js" defer></script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const categoryColors = {
+        "Small Business": "#4edf00",
+        "Corporation": "#bc1214",
+        "Community Partner": "#f99f19"
+      };
+      const STORAGE_KEY = "kfb_partners_v2";
+      let partners = [];
+      let selectedIndex = null;
+
+      const map = L.map('map').setView([41.433, -96.498], 10);
+      map.zoomControl.setPosition('bottomright');
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19, attribution: '&copy; OpenStreetMap'
+      }).addTo(map);
+
+      const groups = {
+        "Small Business": L.layerGroup().addTo(map),
+        "Corporation": L.layerGroup().addTo(map),
+        "Community Partner": L.layerGroup().addTo(map),
+        "Other": L.layerGroup().addTo(map)
+      };
+      const overlays = {
+        "Small Business": groups["Small Business"],
+        "Corporation": groups["Corporation"],
+        "Community Partner": groups["Community Partner"],
+        "Other": groups["Other"]
+      };
+      L.control.layers(null, overlays, { collapsed: false }).addTo(map);
+
+      // Always-visible legend control
+      const LegendControl = L.Control.extend({
+        options: { position: 'bottomleft' },
+        onAdd: function () {
+          const div = L.DomUtil.create('div', 'info legend');
+          div.style.background = 'white';
+          div.style.border = '2px solid #6a764b';
+          div.style.borderRadius = '10px';
+          div.style.padding = '10px';
+          div.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+          div.style.fontFamily = 'system-ui, -apple-system, Arial, sans-serif';
+          div.style.fontSize = '12px';
+          div.innerHTML = `
+            <div style="font-weight:800;color:#6a764b;margin-bottom:6px;">KFB Partnership Map</div>
+            <div><b>Categories</b></div>
+            <div style="color:#bc1214;">⬤ Corporation</div>
+            <div style="color:#f99f19;">⬤ Community Partner</div>
+            <div style="color:#4edf00;">⬤ Small Business</div>
+            <div style="margin-top:6px;color:#666;">Click map to fill Lat/Lon.</div>
+          `;
+          return div;
+        }
+      });
+      map.addControl(new LegendControl());
+
+      map.on("click", (e) => {
+        document.getElementById("lat").value = e.latlng.lat.toFixed(6);
+        document.getElementById("lon").value = e.latlng.lng.toFixed(6);
+      });
+
+      function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(partners)); }
+      function load() { const raw = localStorage.getItem(STORAGE_KEY); partners = raw ? JSON.parse(raw) : []; }
+      function clearLayers() { Object.values(groups).forEach(g => g.clearLayers()); }
+      function renderMarkers() {
+        clearLayers();
+        partners.forEach((row) => {
+          const lat = parseFloat(row.latitude);
+          const lon = parseFloat(row.longitude);
+          if (isNaN(lat) || isNaN(lon)) return;
+          const cat = (row.category && groups[row.category]) ? row.category : "Other";
+          const color = categoryColors[row.category] || "gray";
+          const marker = L.circleMarker([lat, lon], { radius: 8, fillColor: color, color: "#333", weight: 1, fillOpacity: 0.9 });
+          marker.bindPopup(`<b>${row.name || ""}</b><br><i>${row.category || ""}</i><br>${row.address || ""}, ${row.city || ""}<br>${row.notes || ""}`);
+          marker.addTo(groups[cat]);
+        });
+      }
+      function renderTable() {
+        const tbody = document.querySelector("#partnersTable tbody");
+        tbody.innerHTML = "";
+        partners.forEach((row, idx) => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${row.category || ""}</td>
+            <td>${row.name || ""}</td>
+            <td>${row.city || ""}</td>
+            <td>${row.latitude || ""}</td>
+            <td>${row.longitude || ""}</td>
+            <td><button data-idx="${idx}" class="del" title="Delete">🗑️</button></td>
+          `;
+          tr.querySelector(".del").addEventListener("click", () => {
+            partners.splice(idx, 1); save(); renderTable(); renderMarkers();
+          });
+          tbody.appendChild(tr);
+        });
+      }
+      function getFormRow() {
+        return {
+          category: document.getElementById("category").value.trim(),
+          name: document.getElementById("name").value.trim(),
+          address: document.getElementById("address").value.trim(),
+          city: document.getElementById("city").value.trim(),
+          latitude: document.getElementById("lat").value.trim(),
+          longitude: document.getElementById("lon").value.trim(),
+          notes: document.getElementById("notes").value.trim()
+        };
+      }
+      function clearForm() {
+        selectedIndex = null;
+        document.getElementById("category").value = "Small Business";
+        document.getElementById("name").value = "";
+        document.getElementById("address").value = "";
+        document.getElementById("city").value = "";
+        document.getElementById("lat").value = "";
+        document.getElementById("lon").value = "";
+        document.getElementById("notes").value = "";
+      }
+      document.getElementById("addUpdate").addEventListener("click", () => {
+        const row = getFormRow();
+        if (!row.name) { alert("Please add a Partner Name"); return; }
+        if (!row.latitude || !row.longitude) { alert("Please set coordinates (click the map)."); return; }
+        partners.push(row); save(); renderTable(); renderMarkers(); clearForm();
+      });
+      document.getElementById("clearForm").addEventListener("click", clearForm);
+      document.getElementById("exportCsv").addEventListener("click", () => {
+        const header = ["name","address","city","category","latitude","longitude","notes"];
+        const rows = partners.map(r => [r.name||"", r.address||"", r.city||"", r.category||"", r.latitude||"", r.longitude||"", r.notes||""]);
+        const csv = [header.join(",")].concat(rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(","))).join("\\n");
+        const blob = new Blob([csv], {type: "text/csv;charset=utf-8;"});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a"); a.href = url; a.download = "kfb_partners.csv"; a.click();
+        URL.revokeObjectURL(url);
+      });
+      document.getElementById("importCsv").addEventListener("change", (e) => {
+        const file = e.target.files[0]; if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          const text = reader.result;
+          const lines = text.split(/\\r?\\n/);
+          const [header, ...dataLines] = lines;
+          const cols = header.split(",");
+          partners = dataLines.filter(Boolean).map(line => {
+            const vals = line.match(/(".*?"|[^",]+)(?=,|$)/g).map(s => s.replace(/^"|"$/g, "").replace(/""/g, '"'));
+            const obj = {};
+            cols.forEach((c, i) => obj[c.trim()] = (vals[i]||"").trim());
+            return obj;
+          });
+          save(); renderTable(); renderMarkers();
+        };
+        reader.readAsText(file);
+      });
+      document.getElementById("resetAll").addEventListener("click", () => {
+        if (confirm("This will clear all data in this browser. Continue?")) {
+          partners = []; save(); renderTable(); renderMarkers();
+        }
+      });
+
+      const layout = document.getElementById('layout');
+      const toggle = document.getElementById('toggle');
+      toggle.addEventListener('click', () => {
+        layout.classList.toggle('collapsed');
+        setTimeout(() => { map.invalidateSize(); }, 260);
+      });
+
+      load();
+      if (partners.length === 0) {
+        partners = [
+          {name:"SAMPLE — Midland University", address:"900 N Clarkson St", city:"Fremont, NE", category:"Community Partner", latitude:"41.4380", longitude:"-96.4892", notes:"Replace with real data"},
+          {name:"SAMPLE — Methodist Fremont Health", address:"450 E 23rd St", city:"Fremont, NE", category:"Community Partner", latitude:"41.4438", longitude:"-96.5007", notes:"Replace with real data"},
+          {name:"SAMPLE — All Metals Market", address:"1200 Elm St", city:"Fremont, NE", category:"Corporation", latitude:"41.4513", longitude:"-96.4827", notes:"Replace with real data"}
+        ];
+        save();
+      }
+      renderTable(); renderMarkers();
+    });
+  </script>
+</body>
+</html>
